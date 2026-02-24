@@ -12,3 +12,4 @@ venv/
 # Artifacts (we’ll control releases manually)
 data/processed/
 releases/**/artifacts/
+releases/
