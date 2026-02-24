@@ -1,0 +1,30 @@
+project:
+  name: llmops-final
+  environment: local
+
+data:
+  raw_dir: data/raw
+  processed_dir: data/processed
+
+llm:
+  provider: openai
+  model: gpt-4o-mini
+  temperature: 0.2
+
+retrieval:
+  top_k: 5
+  rrf_k: 60
+  text_weight: 0.6
+
+vectorstores:
+  active: faiss
+  faiss:
+    index_path: releases/current/faiss.index
+    metadata_path: releases/current/faiss_meta.json
+  milvus:
+    uri: ${MILVUS_URI}
+    token: ${MILVUS_TOKEN}
+    collection: product_hybrid_search_mvp2
+
+monitoring:
+  provider: langfuse

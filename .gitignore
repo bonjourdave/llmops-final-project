@@ -1,0 +1,14 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+.env
+*.log
+
+# VS Code
+.vscode/
+
+# Artifacts (we’ll control releases manually)
+data/processed/
+releases/**/artifacts/
