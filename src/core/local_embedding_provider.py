@@ -1,26 +1,46 @@
 from __future__ import annotations
 
-from typing import List
+from dataclasses import dataclass
+from typing import List, Optional
+
 import numpy as np
 from sentence_transformers import SentenceTransformer
 
-from .embedding_provider import EmbeddingProvider
 
-
-class LocalSentenceTransformerProvider(EmbeddingProvider):
+@dataclass
+class LocalSentenceTransformerProvider:
     """
-    Free local embedding provider using SentenceTransformers.
-    Default model is small and fast for laptops.
+    Local embedding provider using sentence-transformers.
+
+    IMPORTANT:
+    - The model you use here MUST match the model used to build the FAISS index.
+    - Different models produce different embedding dimensions (e.g., 384 vs 768).
     """
 
-    def __init__(self, model_name: str = "all-MiniLM-L6-v2"):
-        self.model_name = model_name
-        self.model = SentenceTransformer(model_name)
+    model_name: str = "sentence-transformers/all-MiniLM-L6-v2"
+    _model: Optional[SentenceTransformer] = None
+
+    def _load(self) -> SentenceTransformer:
+        if self._model is None:
+            self._model = SentenceTransformer(self.model_name)
+        return self._model
+
+    @property
+    def dim(self) -> int:
+        m = self._load()
+        return m.get_sentence_embedding_dimension()
 
     def embed_text(self, texts: List[str]) -> np.ndarray:
-        vectors = self.model.encode(texts, convert_to_numpy=True, normalize_embeddings=True)
-        return vectors.astype(np.float32)
+        m = self._load()
+        vecs = m.encode(
+            texts,
+            convert_to_numpy=True,
+            normalize_embeddings=True,
+            show_progress_bar=False,
+        )
+        # Ensure float32 for FAISS
+        return np.asarray(vecs, dtype=np.float32)
 
     def embed_query(self, query: str) -> np.ndarray:
-        vecs = self.embed_text([query])
-        return vecs[0]
+        vec = self.embed_text([query])[0]
+        return vec
