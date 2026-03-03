@@ -25,7 +25,7 @@ Retrieved titles:
 {context}"""
 
 
-def _format_context(items: List[Dict]) -> str:
+def format_context(items: List[Dict]) -> str:
     lines: List[str] = []
     for item in items:
         title = item.get("title", "Unknown")
@@ -52,7 +52,7 @@ def run_chain(
     items: retrieval results from Retriever.retrieve().items
     Returns the model's answer as a plain string.
     """
-    context = _format_context(items)
+    context = format_context(items)
 
     prompt = ChatPromptTemplate.from_messages(
         [

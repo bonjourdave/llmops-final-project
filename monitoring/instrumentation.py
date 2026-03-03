@@ -116,6 +116,41 @@ class LangfuseClient:
             logger.warning("Langfuse span_context failed: %s", exc)
             yield None
 
+    @contextmanager
+    def generation_context(
+        self, name: str, input: dict, metadata: dict | None = None
+    ) -> Generator[Any, None, None]:
+        """
+        Context manager for an LLM generation observation (as_type='generation').
+
+        Langfuse renders generation observations with prompt/completion diffs
+        and tracks model/token usage separately from plain spans.
+        Must be called inside an active trace_context block.
+
+        Example:
+            with lf.generation_context(
+                "generate",
+                input={"context": ctx, "question": q},
+                metadata={"model": "gpt-4o-mini", "temperature": 0.2},
+            ) as gen:
+                answer = run_chain(...)
+                lf.update(gen, {"answer": answer})
+        """
+        if not self.enabled:
+            yield None
+            return
+        try:
+            with self._client.start_as_current_observation(
+                as_type="generation",
+                name=name,
+                input=input,
+                metadata=metadata or {},
+            ) as obs:
+                yield obs
+        except Exception as exc:
+            logger.warning("Langfuse generation_context failed: %s", exc)
+            yield None
+
     def update(self, obs: Any, output: dict) -> None:
         """Set the output field on a trace or span observation."""
         if obs is None:

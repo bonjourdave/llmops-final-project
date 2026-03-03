@@ -19,7 +19,7 @@ from pydantic import BaseModel
 from ingestion.embedders import OpenAIEmbedder
 from monitoring.feedback import post_feedback
 from monitoring.instrumentation import LangfuseClient
-from serving.chain import run_chain
+from serving.chain import format_context, run_chain
 from serving.retriever import Retriever
 from serving.versioning import pick_version
 from shared.backends.chroma_store import ChromaVectorStore
@@ -139,14 +139,32 @@ def query(request: QueryRequest):
                 {"query": request.query, "top_k": request.top_k},
             ) as span:
                 result = retriever.retrieve(request.query, top_k=request.top_k)
-                lf.update(span, {"num_hits": len(result.items)})
+                lf.update(span, {
+                    "num_hits": len(result.items),
+                    "documents": [
+                        {
+                            "title": item.get("title", ""),
+                            "type": item.get("type", ""),
+                            "description": item.get("description", ""),
+                            "score": item.get("_score"),
+                        }
+                        for item in result.items
+                    ],
+                })
 
-            answer = run_chain(
-                query=request.query,
-                items=result.items,
-                model=llm_cfg["model"],
-                temperature=llm_cfg["temperature"],
-            )
+            context_text = format_context(result.items)
+            with lf.generation_context(
+                "generate",
+                input={"context": context_text, "question": request.query},
+                metadata={"model": llm_cfg["model"], "temperature": llm_cfg["temperature"]},
+            ) as gen_obs:
+                answer = run_chain(
+                    query=request.query,
+                    items=result.items,
+                    model=llm_cfg["model"],
+                    temperature=llm_cfg["temperature"],
+                )
+                lf.update(gen_obs, {"answer": answer})
         except Exception as exc:
             lf.update(root_obs, {"error": str(exc)})
             logger.exception("Query failed")
