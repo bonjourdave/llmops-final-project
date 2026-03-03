@@ -1,11 +1,11 @@
 import sys
 from pathlib import Path
 
-sys.path.append(str(Path(__file__).resolve().parents[1]))
+sys.path.append(str(Path(__file__).resolve().parents[2]))
 
 from src.core.local_embedding_provider import LocalSentenceTransformerProvider
-from src.core.faiss_store import FAISSVectorStore
-from src.core.retriever import Retriever
+from shared.backends.faiss_store import FAISSVectorStore
+from serving.retriever import Retriever
 
 
 def main():
