@@ -1,13 +1,31 @@
 # Docker Compose for the RAG stack.
 #
-# Phase 2: ingestion only.
-# Serving and UI services will be added in Phase 3–5.
+# Services:
+#   serving   — always on; FastAPI RAG API on :8000
+#   ingestion — run on demand via --profile ingestion
+#   ui        — added in Phase 4
 #
 # Usage:
-#   docker compose -f docker/docker-compose.yml --profile ingestion build
+#   docker compose -f docker/docker-compose.yml up serving
 #   docker compose -f docker/docker-compose.yml --profile ingestion run --rm ingestion
 
 services:
+  serving:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.serving
+    env_file: ../.env
+    ports:
+      - "8000:8000"
+    volumes:
+      # Read the Chroma database written by the ingestion container.
+      - ../.chroma:/app/.chroma
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
   ingestion:
     build:
       context: ..
@@ -17,8 +35,5 @@ services:
       - DO_NOT_TRACK=1
     profiles: [ingestion]
     volumes:
-      # Chroma database — persists after container exits so the serving
-      # layer can read the collection in later phases.
       - ../.chroma:/app/.chroma
-      # Version manifest — written by dag.py, readable on the host.
       - ../versions.json:/app/versions.json
