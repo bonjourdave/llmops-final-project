@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import logging
 from contextlib import asynccontextmanager
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
@@ -117,7 +117,6 @@ def health():
 @app.post("/query", response_model=QueryResponse)
 def query(request: QueryRequest):
     serving_cfg: dict = app.state.serving_cfg
-    pipeline_cfg: dict = app.state.pipeline_cfg
     lf: LangfuseClient = app.state.lf
 
     version = pick_version(serving_cfg)
@@ -125,32 +124,36 @@ def query(request: QueryRequest):
     collection_name = f"{vs_cfg['collection_prefix']}_{version}"
     llm_cfg = serving_cfg["llm"]
 
-    trace_id, trace = lf.start_trace(
-        name="rag_query",
-        input={"query": request.query, "version": version, "top_k": request.top_k},
-    )
+    with lf.trace_context(
+        "rag_query",
+        {"query": request.query, "version": version, "top_k": request.top_k},
+    ) as (trace_id, root_obs):
+        try:
+            store = _get_store(collection_name, persist_dir=".chroma")
+            retriever = Retriever(
+                embedder=app.state.embedder, store=store, version=version
+            )
 
-    try:
-        store = _get_store(collection_name, persist_dir=".chroma")
-        retriever = Retriever(
-            embedder=app.state.embedder, store=store, version=version
-        )
-        result = retriever.retrieve(
-            request.query, top_k=request.top_k, lf_client=lf, trace=trace
-        )
+            with lf.span_context(
+                "retrieve",
+                {"query": request.query, "top_k": request.top_k},
+            ) as span:
+                result = retriever.retrieve(request.query, top_k=request.top_k)
+                lf.update(span, {"num_hits": len(result.items)})
 
-        answer = run_chain(
-            query=request.query,
-            items=result.items,
-            model=llm_cfg["model"],
-            temperature=llm_cfg["temperature"],
-        )
-    except Exception as exc:
-        lf.end_trace(trace, output={"error": str(exc)})
-        logger.exception("Query failed")
-        raise HTTPException(status_code=500, detail=str(exc))
+            answer = run_chain(
+                query=request.query,
+                items=result.items,
+                model=llm_cfg["model"],
+                temperature=llm_cfg["temperature"],
+            )
+        except Exception as exc:
+            lf.update(root_obs, {"error": str(exc)})
+            logger.exception("Query failed")
+            raise HTTPException(status_code=500, detail=str(exc))
 
-    lf.end_trace(trace, output={"answer": answer})
+        lf.update(root_obs, {"answer": answer})
+
     logger.info(
         "query version=%s top_k=%s trace_id=%s",
         version,

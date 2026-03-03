@@ -1,25 +1,26 @@
 """
-Langfuse tracing wrappers for the serving layer.
+Langfuse tracing wrappers for the serving layer — SDK v3 compatible.
 
-Every /query request gets one trace. The retrieval step gets a child span
-inside that trace. Telemetry failures are caught and logged — they never
-crash the serving layer.
+SDK v3 uses context-manager-based observations rather than the imperative
+v2 trace/span object API. All methods are no-ops when Langfuse is disabled.
 """
 
 from __future__ import annotations
 
 import logging
-from typing import Any, Optional, Tuple
+from contextlib import contextmanager
+from typing import Any, Generator, Tuple
 
 logger = logging.getLogger("llmops.instrumentation")
 
 
 class LangfuseClient:
     """
-    Thin wrapper around the Langfuse SDK.
+    Thin wrapper around the Langfuse SDK v3.
 
     Constructed once at API startup via from_config().
-    All methods are no-ops when Langfuse is disabled or unavailable.
+    Context managers yield (trace_id, obs) or just obs for spans.
+    Disabled when keys are absent — all methods become no-ops.
     """
 
     def __init__(self, client: Any | None) -> None:
@@ -59,45 +60,70 @@ class LangfuseClient:
     def enabled(self) -> bool:
         return self._client is not None
 
-    def start_trace(self, name: str, input: dict) -> Tuple[str, Any]:
+    @contextmanager
+    def trace_context(
+        self, name: str, input: dict
+    ) -> Generator[Tuple[str, Any], None, None]:
         """
-        Open a new trace and return (trace_id, trace_handle).
-        Returns ("no-trace", None) when disabled.
+        Context manager that wraps a full request as a root trace.
+
+        Yields (trace_id, obs). When disabled, yields ("no-trace", None).
+        Use get_current_trace_id() inside the block to retrieve the UUID.
+
+        Example:
+            with lf.trace_context("rag_query", {"query": q}) as (trace_id, obs):
+                ...
+                lf.update(obs, {"answer": answer})
         """
         if not self.enabled:
-            return "no-trace", None
-        try:
-            trace = self._client.trace(name=name, input=input)
-            return trace.id, trace
-        except Exception as exc:
-            logger.warning("Langfuse start_trace failed: %s", exc)
-            return "no-trace", None
-
-    def span(self, trace: Any, name: str, input: dict) -> Any:
-        """Open a child span on an existing trace handle."""
-        if trace is None:
-            return None
-        try:
-            return trace.span(name=name, input=input)
-        except Exception as exc:
-            logger.warning("Langfuse span failed: %s", exc)
-            return None
-
-    def end_span(self, span: Any, output: dict) -> None:
-        if span is None:
+            yield "no-trace", None
             return
         try:
-            span.end(output=output)
+            with self._client.start_as_current_observation(
+                as_type="span", name=name, input=input
+            ) as obs:
+                trace_id = self._client.get_current_trace_id() or obs.id
+                yield trace_id, obs
         except Exception as exc:
-            logger.warning("Langfuse end_span failed: %s", exc)
+            logger.warning("Langfuse trace_context failed: %s", exc)
+            yield "no-trace", None
 
-    def end_trace(self, trace: Any, output: dict) -> None:
-        if trace is None:
+    @contextmanager
+    def span_context(
+        self, name: str, input: dict
+    ) -> Generator[Any, None, None]:
+        """
+        Context manager for a child span.
+
+        Must be called inside an active trace_context block so that v3's
+        context variable links the span to the parent trace automatically.
+        Yields the observation object (None when disabled).
+
+        Example:
+            with lf.span_context("retrieve", {"query": q}) as span:
+                result = retriever.retrieve(q)
+                lf.update(span, {"num_hits": len(result.items)})
+        """
+        if not self.enabled:
+            yield None
             return
         try:
-            trace.update(output=output)
+            with self._client.start_as_current_observation(
+                as_type="span", name=name, input=input
+            ) as obs:
+                yield obs
         except Exception as exc:
-            logger.warning("Langfuse end_trace failed: %s", exc)
+            logger.warning("Langfuse span_context failed: %s", exc)
+            yield None
+
+    def update(self, obs: Any, output: dict) -> None:
+        """Set the output field on a trace or span observation."""
+        if obs is None:
+            return
+        try:
+            obs.update(output=output)
+        except Exception as exc:
+            logger.warning("Langfuse update failed: %s", exc)
 
     def flush(self) -> None:
         if not self.enabled:

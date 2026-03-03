@@ -23,10 +23,11 @@ def post_feedback(client: LangfuseClient, trace_id: str, rating: int) -> None:
     if not client.enabled or trace_id == "no-trace":
         return
     try:
-        client._client.score(
+        client._client.create_score(
             trace_id=trace_id,
             name="user_rating",
             value=rating,
+            data_type="NUMERIC",
         )
     except Exception as exc:
         logger.warning("Langfuse post_feedback failed (trace_id=%s): %s", trace_id, exc)
