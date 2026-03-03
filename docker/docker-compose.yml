@@ -1,0 +1,24 @@
+# Docker Compose for the RAG stack.
+#
+# Phase 2: ingestion only.
+# Serving and UI services will be added in Phase 3–5.
+#
+# Usage:
+#   docker compose -f docker/docker-compose.yml --profile ingestion build
+#   docker compose -f docker/docker-compose.yml --profile ingestion run --rm ingestion
+
+services:
+  ingestion:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.ingestion
+    env_file: ../.env
+    environment:
+      - DO_NOT_TRACK=1
+    profiles: [ingestion]
+    volumes:
+      # Chroma database — persists after container exits so the serving
+      # layer can read the collection in later phases.
+      - ../.chroma:/app/.chroma
+      # Version manifest — written by dag.py, readable on the host.
+      - ../versions.json:/app/versions.json
