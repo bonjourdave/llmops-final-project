@@ -8,7 +8,7 @@ from typing import List
 import numpy as np
 from openai import OpenAI
 
-from .embedding_provider import EmbeddingProvider
+from shared.embedding_provider import EmbeddingProvider
 
 
 class OpenAIEmbeddingProvider(EmbeddingProvider):
