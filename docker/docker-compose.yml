@@ -2,11 +2,11 @@
 #
 # Services:
 #   serving   — always on; FastAPI RAG API on :8000
+#   ui        — always on; Chainlit chat UI on :8080
 #   ingestion — run on demand via --profile ingestion
-#   ui        — added in Phase 4
 #
 # Usage:
-#   docker compose -f docker/docker-compose.yml up serving
+#   docker compose -f docker/docker-compose.yml up
 #   docker compose -f docker/docker-compose.yml --profile ingestion run --rm ingestion
 
 services:
@@ -25,6 +25,18 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
+
+  ui:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.ui
+    env_file: ../.env
+    environment:
+      - SERVING_URL=http://serving:8000
+    ports:
+      - "8080:8080"
+    depends_on:
+      - serving
 
   ingestion:
     build:
