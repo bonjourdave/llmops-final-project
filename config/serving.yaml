@@ -1,0 +1,10 @@
+llm:
+  model: "gpt-4o-mini"
+  temperature: 0.2
+
+vector_store:
+  active_version: "v1"
+  collection_prefix: "docs"
+  ab_test:
+    enabled: false
+    versions: []

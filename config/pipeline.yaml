@@ -1,0 +1,12 @@
+pipeline:
+  embedding_model: "text-embedding-3-small"
+  chunk_size: 512
+  chunk_overlap: 50
+  vector_store_version: "v1"
+
+vector_store:
+  # Phase 1/2: "faiss" (local dev). Phase 2+: "chroma". Phase 6+: "zilliz".
+  backend: "faiss"
+  collection_prefix: "docs"
+  connection_uri: "${ZILLIZ_URI}"
+  token: "${ZILLIZ_TOKEN}"
