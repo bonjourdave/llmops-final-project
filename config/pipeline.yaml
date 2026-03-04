@@ -6,7 +6,7 @@ pipeline:
 
 vector_store:
   # Phase 1/2: "faiss" (local dev). Phase 2+: "chroma". Phase 6+: "zilliz".
-  backend: "chroma"
+  backend: "zilliz"
   collection_prefix: "docs"
   connection_uri: "${ZILLIZ_URI}"
   token: "${ZILLIZ_TOKEN}"

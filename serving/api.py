@@ -22,7 +22,6 @@ from monitoring.instrumentation import LangfuseClient
 from serving.chain import format_context, run_chain
 from serving.retriever import Retriever
 from serving.versioning import pick_version
-from shared.backends.chroma_store import ChromaVectorStore
 from shared.config_loader import load_config
 from shared.logging_config import configure_logging
 
@@ -55,13 +54,27 @@ class FeedbackRequest(BaseModel):
 # Startup / shutdown
 # ---------------------------------------------------------------------------
 
-_store_cache: Dict[str, ChromaVectorStore] = {}
+_store_cache: Dict[str, Any] = {}
 
 
-def _get_store(collection_name: str, persist_dir: str) -> ChromaVectorStore:
-    """Return a cached ChromaVectorStore for the given collection name."""
+def _get_store(collection_name: str, vs_cfg: dict) -> Any:
+    """Return a cached vector store for the given collection name."""
     if collection_name not in _store_cache:
-        store = ChromaVectorStore(persist_directory=persist_dir)
+        backend = vs_cfg.get("backend", "chroma")
+        if backend == "zilliz":
+            uri = vs_cfg.get("connection_uri", "")
+            token = vs_cfg.get("token", "")
+            if not uri or not token:
+                raise RuntimeError(
+                    "backend=zilliz but ZILLIZ_URI or ZILLIZ_TOKEN is not set in the environment. "
+                    "Add both to .env and rebuild."
+                )
+            from shared.backends.zilliz_store import ZillizVectorStore
+            store = ZillizVectorStore(uri=uri, token=token)
+        else:
+            from shared.backends.chroma_store import ChromaVectorStore
+            store = ChromaVectorStore(persist_directory=".chroma")
+        logger.info("Creating store: backend=%s collection=%s", backend, collection_name)
         store.create_collection(collection_name, dimension=0)
         _store_cache[collection_name] = store
     return _store_cache[collection_name]
@@ -79,6 +92,18 @@ async def lifespan(app: FastAPI):
     app.state.embedder = OpenAIEmbedder(
         model=pipeline_cfg["pipeline"]["embedding_model"]
     )
+
+    vs_backend_cfg = pipeline_cfg["vector_store"]
+    backend = vs_backend_cfg.get("backend", "chroma")
+    logger.info("Vector store backend: %s", backend)
+    if backend == "zilliz":
+        uri = vs_backend_cfg.get("connection_uri", "")
+        if not uri or not vs_backend_cfg.get("token", ""):
+            raise RuntimeError(
+                "backend=zilliz but ZILLIZ_URI or ZILLIZ_TOKEN is not set. "
+                "Add both to .env and rebuild."
+            )
+        logger.info("Zilliz URI: %s", uri[:50])
 
     logger.info(
         "Serving API ready — active_version=%s langfuse=%s",
@@ -129,7 +154,7 @@ def query(request: QueryRequest):
         {"query": request.query, "version": version, "top_k": request.top_k},
     ) as (trace_id, root_obs):
         try:
-            store = _get_store(collection_name, persist_dir=".chroma")
+            store = _get_store(collection_name, app.state.pipeline_cfg["vector_store"])
             retriever = Retriever(
                 embedder=app.state.embedder, store=store, version=version
             )

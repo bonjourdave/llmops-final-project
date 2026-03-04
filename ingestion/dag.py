@@ -22,13 +22,19 @@ from prefect import flow, task
 from ingestion.chunkers import TextChunker
 from ingestion.embedders import OpenAIEmbedder
 from ingestion.loaders import load_netflix_csv
-from shared.backends.chroma_store import ChromaVectorStore
 from shared.config_loader import load_config
 
 CONFIG_PATH = Path("config/pipeline.yaml")
 VERSIONS_PATH = Path("versions.json")
 DATA_PATH = Path("dataraw/netflix_titles.csv")
 EMBED_BATCH_SIZE = 100
+
+# Known embedding dimensions — passed to Zilliz at collection creation time.
+_EMBEDDING_DIM: Dict[str, int] = {
+    "text-embedding-3-small": 1536,
+    "text-embedding-3-large": 3072,
+    "text-embedding-ada-002": 1536,
+}
 
 
 # ---------------------------------------------------------------------------
@@ -72,13 +78,27 @@ def embed_and_write(
     model: str,
     collection_name: str,
     persist_dir: str,
+    backend: str = "chroma",
+    connection_uri: str = "",
+    token: str = "",
 ) -> int:
     embedder = OpenAIEmbedder(model=model)
-    store = ChromaVectorStore(persist_directory=persist_dir)
 
-    # Embedding dimension is fixed for text-embedding-3-small (1536).
-    # Pass 0 here — Chroma infers dimension from the first add() call.
-    store.create_collection(collection_name, dimension=0)
+    if backend == "zilliz":
+        if not connection_uri or not token:
+            raise ValueError(
+                "backend=zilliz but ZILLIZ_URI or ZILLIZ_TOKEN is not set. "
+                "Check your .env file."
+            )
+        from shared.backends.zilliz_store import ZillizVectorStore
+        store = ZillizVectorStore(uri=connection_uri, token=token)
+    else:
+        from shared.backends.chroma_store import ChromaVectorStore
+        store = ChromaVectorStore(persist_directory=persist_dir)
+
+    print(f"embed_and_write: backend={backend} collection={collection_name}")
+    dim = _EMBEDDING_DIM.get(model, 1536)
+    store.create_collection(collection_name, dimension=dim)
 
     for i in range(0, len(chunks), EMBED_BATCH_SIZE):
         batch = chunks[i : i + EMBED_BATCH_SIZE]
@@ -134,6 +154,7 @@ def ingest() -> None:
     chunk_overlap: int = pipeline_cfg["chunk_overlap"]
     version: str = pipeline_cfg["vector_store_version"]
     collection_name: str = f"{vs_cfg['collection_prefix']}_{version}"
+    backend: str = vs_cfg.get("backend", "chroma")
     persist_dir: str = ".chroma"
 
     records = load_records()
@@ -143,6 +164,9 @@ def ingest() -> None:
         model=model,
         collection_name=collection_name,
         persist_dir=persist_dir,
+        backend=backend,
+        connection_uri=vs_cfg.get("connection_uri", ""),
+        token=vs_cfg.get("token", ""),
     )
     update_versions(
         version=version,

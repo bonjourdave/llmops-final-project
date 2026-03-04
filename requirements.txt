@@ -77,7 +77,7 @@ wrapt==1.17.3
 zipp==3.23.0
 
 # --- Phase 2+ dependencies (pin before next docker build) ---
-pymilvus>=2.4.0
+pymilvus==2.6.3
 langchain>=0.3.0
 langchain-openai>=0.2.0
 prefect>=3.0.0
