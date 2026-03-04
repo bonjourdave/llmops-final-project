@@ -143,9 +143,8 @@ def query(request: QueryRequest):
                     "num_hits": len(result.items),
                     "documents": [
                         {
-                            "title": item.get("title", ""),
-                            "type": item.get("type", ""),
-                            "description": item.get("description", ""),
+                            "id": item.get("id", ""),
+                            "text": item.get("text", ""),
                             "score": item.get("_score"),
                         }
                         for item in result.items
@@ -170,7 +169,16 @@ def query(request: QueryRequest):
             logger.exception("Query failed")
             raise HTTPException(status_code=500, detail=str(exc))
 
-        lf.update(root_obs, {"answer": answer})
+        lf.update(
+            root_obs,
+            output={"answer": answer},
+            metadata={
+                "retrieved_context": [
+                    {"id": item.get("id", ""), "text": item.get("text", ""), "score": item.get("_score")}
+                    for item in result.items
+                ]
+            },
+        )
 
     logger.info(
         "query version=%s top_k=%s trace_id=%s",

@@ -69,6 +69,7 @@ class ChromaVectorStore(VectorStoreProvider):
         hits: List[Dict] = []
         for i, meta in enumerate(results["metadatas"][0]):
             hit = dict(meta)
+            hit["id"] = results["ids"][0][i]
             hit["text"] = results["documents"][0][i]
             # Chroma cosine distance: 0 = identical, 2 = opposite.
             # Convert to a 0–1 similarity score.

@@ -151,12 +151,17 @@ class LangfuseClient:
             logger.warning("Langfuse generation_context failed: %s", exc)
             yield None
 
-    def update(self, obs: Any, output: dict) -> None:
-        """Set the output field on a trace or span observation."""
+    def update(self, obs: Any, output: dict | None = None, metadata: dict | None = None) -> None:
+        """Set output and/or metadata on a trace or span observation."""
         if obs is None:
             return
         try:
-            obs.update(output=output)
+            kwargs: dict = {}
+            if output is not None:
+                kwargs["output"] = output
+            if metadata is not None:
+                kwargs["metadata"] = metadata
+            obs.update(**kwargs)
         except Exception as exc:
             logger.warning("Langfuse update failed: %s", exc)
 
