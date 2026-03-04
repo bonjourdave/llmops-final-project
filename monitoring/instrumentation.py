@@ -118,7 +118,7 @@ class LangfuseClient:
 
     @contextmanager
     def generation_context(
-        self, name: str, input: dict, metadata: dict | None = None
+        self, name: str, input: dict, model: str | None = None, metadata: dict | None = None
     ) -> Generator[Any, None, None]:
         """
         Context manager for an LLM generation observation (as_type='generation').
@@ -144,6 +144,7 @@ class LangfuseClient:
                 as_type="generation",
                 name=name,
                 input=input,
+                model=model,
                 metadata=metadata or {},
             ) as obs:
                 yield obs
@@ -151,8 +152,14 @@ class LangfuseClient:
             logger.warning("Langfuse generation_context failed: %s", exc)
             yield None
 
-    def update(self, obs: Any, output: dict | None = None, metadata: dict | None = None) -> None:
-        """Set output and/or metadata on a trace or span observation."""
+    def update(
+        self,
+        obs: Any,
+        output: dict | None = None,
+        metadata: dict | None = None,
+        usage: dict | None = None,
+    ) -> None:
+        """Set output, metadata, and/or usage on a trace or span observation."""
         if obs is None:
             return
         try:
@@ -161,6 +168,8 @@ class LangfuseClient:
                 kwargs["output"] = output
             if metadata is not None:
                 kwargs["metadata"] = metadata
+            if usage is not None:
+                kwargs["usage"] = usage
             obs.update(**kwargs)
         except Exception as exc:
             logger.warning("Langfuse update failed: %s", exc)

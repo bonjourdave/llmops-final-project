@@ -9,7 +9,6 @@ from __future__ import annotations
 
 from typing import Dict, List
 
-from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_openai import ChatOpenAI
 
@@ -45,12 +44,12 @@ def run_chain(
     items: List[Dict],
     model: str = "gpt-4o-mini",
     temperature: float = 0.2,
-) -> str:
+) -> tuple[str, dict]:
     """
     Run the RAG generation step.
 
     items: retrieval results from Retriever.retrieve().items
-    Returns the model's answer as a plain string.
+    Returns (answer, usage) where usage = {"input": prompt_tokens, "output": completion_tokens}.
     """
     context = format_context(items)
 
@@ -61,5 +60,11 @@ def run_chain(
         ]
     )
     llm = ChatOpenAI(model=model, temperature=temperature)
-    chain = prompt | llm | StrOutputParser()
-    return chain.invoke({"context": context, "question": query})
+    messages = prompt.format_messages(context=context, question=query)
+    response = llm.invoke(messages)
+    token_usage = response.response_metadata.get("token_usage", {})
+    usage = {
+        "input": token_usage.get("prompt_tokens", 0),
+        "output": token_usage.get("completion_tokens", 0),
+    }
+    return response.content, usage

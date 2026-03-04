@@ -155,15 +155,16 @@ def query(request: QueryRequest):
             with lf.generation_context(
                 "generate",
                 input={"context": context_text, "question": request.query},
-                metadata={"model": llm_cfg["model"], "temperature": llm_cfg["temperature"]},
+                model=llm_cfg["model"],
+                metadata={"temperature": llm_cfg["temperature"]},
             ) as gen_obs:
-                answer = run_chain(
+                answer, usage = run_chain(
                     query=request.query,
                     items=result.items,
                     model=llm_cfg["model"],
                     temperature=llm_cfg["temperature"],
                 )
-                lf.update(gen_obs, {"answer": answer})
+                lf.update(gen_obs, output={"answer": answer}, usage=usage)
         except Exception as exc:
             lf.update(root_obs, {"error": str(exc)})
             logger.exception("Query failed")
