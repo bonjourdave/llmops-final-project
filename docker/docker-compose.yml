@@ -1,19 +1,28 @@
 # Docker Compose for the RAG stack.
 #
 # Services:
+#   base      — build target only; produces the rag-base image (no ports, no runtime)
 #   serving   — always on; FastAPI RAG API on :8000
 #   ui        — always on; Chainlit chat UI on :8080
 #   ingestion — run on demand via --profile ingestion
 #
 # Usage:
+#   docker compose -f docker/docker-compose.yml build base   # build shared base first
 #   docker compose -f docker/docker-compose.yml up
 #   docker compose -f docker/docker-compose.yml --profile ingestion run --rm ingestion
 
 services:
+  base:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.base
+    image: rag-base
+
   serving:
     build:
       context: ..
       dockerfile: docker/Dockerfile.serving
+    image: rag-serving
     env_file: ../.env
     ports:
       - "8000:8000"
@@ -30,6 +39,7 @@ services:
     build:
       context: ..
       dockerfile: docker/Dockerfile.ui
+    image: rag-ui
     env_file: ../.env
     environment:
       - SERVING_URL=http://serving:8000
@@ -42,6 +52,7 @@ services:
     build:
       context: ..
       dockerfile: docker/Dockerfile.ingestion
+    image: rag-ingestion
     env_file: ../.env
     environment:
       - DO_NOT_TRACK=1
