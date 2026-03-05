@@ -200,9 +200,8 @@ run-ingestion:
 # After running, set these GitHub secrets / repo variables:
 #   WORKLOAD_IDENTITY_PROVIDER — printed at the end of this target
 #   GCP_PROJECT_ID             — your GCP project ID string
-GITHUB_REPO ?= $(error GITHUB_REPO is not set. Usage: make setup-wif GITHUB_REPO=owner/repo)
-
 setup-wif:
+	@[ -n "$(GITHUB_REPO)" ] || { echo "Error: GITHUB_REPO is not set. Usage: make setup-wif GITHUB_REPO=owner/repo"; exit 1; }
 	gcloud services enable iamcredentials.googleapis.com --project=$(GCP_PROJECT_ID)
 	gcloud iam workload-identity-pools create github-pool \
 	  --project=$(GCP_PROJECT_ID) --location=global \
