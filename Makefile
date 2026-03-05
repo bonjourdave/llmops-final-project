@@ -34,19 +34,38 @@ SA_SERVING   := rag-serving-sa@$(GCP_PROJECT_ID).iam.gserviceaccount.com
 SA_UI        := rag-ui-sa@$(GCP_PROJECT_ID).iam.gserviceaccount.com
 SA_INGESTION := rag-ingestion-sa@$(GCP_PROJECT_ID).iam.gserviceaccount.com
 
-.PHONY: build push create-service-accounts create-secrets grant-secret-access \
+.PHONY: build push ensure-builder create-service-accounts create-secrets grant-secret-access \
         deploy-serving deploy-ui deploy-ingestion run-ingestion
 
 # ── Build ─────────────────────────────────────────────────────────────────────
-# Uses two compose files: base config + prod overlay (which pins platform to
-# linux/amd64 required by Cloud Run). Without the overlay, Docker defaults to
-# the host machine's native architecture (arm64 on Apple Silicon), which Cloud
-# Run rejects. The -f flags are additive — prod overlay merges into base config.
-build:
-	docker compose \
-	  -f docker/docker-compose.yml \
-	  -f docker/docker-compose.prod.yml \
-	  build serving ingestion ui
+# Uses docker buildx with explicit --platform linux/amd64 to guarantee amd64
+# output regardless of the host machine's native architecture (arm64 on this
+# aarch64 VM). docker compose build with platform: is unreliable for cross-
+# platform output; buildx --platform is the authoritative mechanism.
+ensure-builder:
+	@docker buildx inspect rag-builder >/dev/null 2>&1 || \
+	  docker buildx create --name rag-builder --driver docker-container --bootstrap
+	docker buildx use rag-builder
+
+build: ensure-builder
+	docker buildx build \
+	  --platform linux/amd64 \
+	  --load \
+	  --file docker/Dockerfile.serving \
+	  --tag rag-serving \
+	  .
+	docker buildx build \
+	  --platform linux/amd64 \
+	  --load \
+	  --file docker/Dockerfile.ui \
+	  --tag rag-ui \
+	  .
+	docker buildx build \
+	  --platform linux/amd64 \
+	  --load \
+	  --file docker/Dockerfile.ingestion \
+	  --tag rag-ingestion \
+	  .
 
 # ── Push ──────────────────────────────────────────────────────────────────────
 push: build

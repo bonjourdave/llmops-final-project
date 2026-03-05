@@ -10,12 +10,6 @@
 #   docker compose -f docker/docker-compose.yml --profile ingestion run --rm ingestion
 
 services:
-  base:
-    build:
-      context: ..
-      dockerfile: docker/Dockerfile.base
-    image: rag-base
-
   serving:
     build:
       context: ..
