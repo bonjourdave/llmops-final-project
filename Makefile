@@ -23,7 +23,7 @@ export
 GIT_SHA         := $(shell git rev-parse --short HEAD)
 REGION          ?= us-central1
 REGISTRY        ?= $(REGION)-docker.pkg.dev/$(GCP_PROJECT_ID)/llmops-rag
-VERSION         ?= $(GIT_SHA)
+VERSION         := $(GIT_SHA)
 
 SERVING_IMAGE   := $(REGISTRY)/rag-serving:$(VERSION)
 UI_IMAGE        := $(REGISTRY)/rag-ui:$(VERSION)
