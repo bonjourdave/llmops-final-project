@@ -9,7 +9,19 @@ venv/
 # VS Code
 .vscode/
 
-# Artifacts (we’ll control releases manually)
-data/processed/
-releases/**/artifacts/
+# Data artifacts
+data/
+dataprocessed/
+
+# FAISS release artifacts (legacy; system now uses Zilliz Cloud)
 releases/
+
+# Jupyter
+docs/notebooks/.ipynb_checkpoints/
+
+# Tool config
+.claude
+.claudeignore
+.devcontainer
+.pytest_cache
+.chroma

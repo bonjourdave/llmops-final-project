@@ -35,7 +35,7 @@ SA_UI        := rag-ui-sa@$(GCP_PROJECT_ID).iam.gserviceaccount.com
 SA_INGESTION := rag-ingestion-sa@$(GCP_PROJECT_ID).iam.gserviceaccount.com
 
 .PHONY: build push ensure-builder create-service-accounts create-secrets grant-secret-access \
-        deploy-serving deploy-ui deploy-ingestion run-ingestion
+        deploy-serving deploy-ui deploy-ingestion run-ingestion setup-wif
 
 # ── Build ─────────────────────────────────────────────────────────────────────
 # Uses docker buildx with explicit --platform linux/amd64 to guarantee amd64
@@ -189,3 +189,45 @@ ZILLIZ_TOKEN=zilliz-token:latest"
 
 run-ingestion:
 	gcloud run jobs execute rag-ingestion --region=$(REGION) --wait
+
+# ── Workload Identity Federation (one-time GCP setup for GitHub Actions CI) ──
+# Creates WIF pool, provider, CI service account, and Artifact Registry binding.
+# The CI SA has Artifact Registry write only — no access to secrets or Cloud Run.
+#
+# Usage (run once with owner-level gcloud credentials):
+#   make setup-wif GITHUB_REPO=owner/repo-name
+#
+# After running, set these GitHub secrets / repo variables:
+#   WORKLOAD_IDENTITY_PROVIDER — printed at the end of this target
+#   GCP_PROJECT_ID             — your GCP project ID string
+GITHUB_REPO ?= $(error GITHUB_REPO is not set. Usage: make setup-wif GITHUB_REPO=owner/repo)
+
+setup-wif:
+	gcloud services enable iamcredentials.googleapis.com --project=$(GCP_PROJECT_ID)
+	gcloud iam workload-identity-pools create github-pool \
+	  --project=$(GCP_PROJECT_ID) --location=global \
+	  --display-name="GitHub Actions pool" 2>/dev/null || true
+	gcloud iam workload-identity-pools providers create-oidc github \
+	  --project=$(GCP_PROJECT_ID) --location=global \
+	  --workload-identity-pool=github-pool \
+	  --display-name="GitHub OIDC provider" \
+	  --attribute-mapping="google.subject=assertion.sub,attribute.repository=assertion.repository" \
+	  --attribute-condition="assertion.repository=='$(GITHUB_REPO)'" \
+	  --issuer-uri="https://token.actions.githubusercontent.com" 2>/dev/null || true
+	gcloud iam service-accounts create rag-ci-sa \
+	  --display-name="RAG CI — Artifact Registry write only" \
+	  --project=$(GCP_PROJECT_ID) 2>/dev/null || true
+	gcloud artifacts repositories add-iam-policy-binding llmops-rag \
+	  --project=$(GCP_PROJECT_ID) --location=$(REGION) \
+	  --member="serviceAccount:rag-ci-sa@$(GCP_PROJECT_ID).iam.gserviceaccount.com" \
+	  --role="roles/artifactregistry.writer"
+	gcloud iam service-accounts add-iam-policy-binding \
+	  rag-ci-sa@$(GCP_PROJECT_ID).iam.gserviceaccount.com \
+	  --project=$(GCP_PROJECT_ID) \
+	  --role="roles/iam.workloadIdentityUser" \
+	  --member="principalSet://iam.googleapis.com/projects/$$(gcloud projects describe $(GCP_PROJECT_ID) --format='value(projectNumber)')/locations/global/workloadIdentityPools/github-pool/attribute.repository/$(GITHUB_REPO)"
+	@echo ""
+	@echo "Set this as GitHub secret WORKLOAD_IDENTITY_PROVIDER:"
+	@gcloud iam workload-identity-pools providers describe github \
+	  --project=$(GCP_PROJECT_ID) --location=global \
+	  --workload-identity-pool=github-pool --format='value(name)'
