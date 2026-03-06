@@ -101,6 +101,9 @@ User query (via Chainlit UI)
 Return { answer, trace_id } to UI
 ```
 
+![Chainlit chat UI showing a Netflix recommendation query with version tag and feedback buttons](../assets/chainlit.png)
+*Chainlit showing a recommendation response tagged with the active vector store version — feedback buttons feed directly into Langfuse*
+
 ---
 
 ## Versioning Mechanic
@@ -122,6 +125,9 @@ Each ingestion run appends to a `versions.json` file tracking what produced each
   "notes": "baseline"
 }
 ```
+
+![Zilliz Cloud showing the docs_v1 collection with embedding vectors](../assets/zilliz_cloud.png)
+*The `docs_v1` collection live in Zilliz Cloud — each ingestion run writes a new named collection, old ones are never overwritten*
 
 ### A/B Testing
 
@@ -155,6 +161,15 @@ Explicit user feedback flows through the system as follows:
 7. Results drive the decision to re-run ingestion with new params or a different embedding model
 
 The `trace_id` is the thread that connects every step. Every response gets one, every feedback event references one.
+
+![Langfuse Tracing list showing rag_query traces with latency and scores](../assets/langfuse_tracing.png)
+*Every `rag_query` is logged as a trace in Langfuse, capturing latency, retrieved context, and scores*
+
+![Langfuse trace detail view showing query input, output, and metadata](../assets/langfuse_tracing_details.png)
+*A single trace expanded — the input query, LLM output, metadata, and the user rating attached via `trace_id`*
+
+![Langfuse Scores view showing user_rating values linked to trace IDs](../assets/langfuse_scores.png)
+*User ratings (0 = thumbs down, 1 = thumbs up) stored as scores and linked to traces — the signal used to compare vector store versions*
 
 ---
 
@@ -402,6 +417,12 @@ on push to main branch:
 
 Deployment to Cloud Run is a manual step after CI succeeds — a human promotes the new image
 using `make deploy-serving VERSION=<sha>`.
+
+![GCP Cloud Run showing rag-ui, rag-serving, and rag-ingestion services live](../assets/gcp_cloud_run.png)
+*All three services deployed: `rag-ui` and `rag-serving` as always-on Cloud Run services, `rag-ingestion` as a Cloud Run Job*
+
+![GCP Artifact Registry showing the llmops-rag repository with all three service images](../assets/gcp_artifact_registry.png)
+*The `llmops-rag` Artifact Registry repository holding all three service images, each tagged with the git commit SHA*
 
 ---
 
