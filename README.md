@@ -8,7 +8,7 @@ Netflix recommendation RAG system with:
 - Prefect ingestion DAG
 - Deployed on GCP Cloud Run via GitHub Actions CI
 
-![Chainlit chat UI](assets/chainlit.png)
+![Chainlit chat UI](assets/chainlit.gif)
 *Chat UI showing a Netflix recommendation, active version tag, and thumbs up/down feedback*
 
 ## Docs
